@@ -321,40 +321,48 @@ function showSavePrompt(acc, pwd) {
         <style>
             @keyframes slideDown { from { transform: translate(-50%, -100%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
             @keyframes fadeOut { to { opacity: 0; transform: translate(-50%, -20px); } }
-            .box { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 16px; padding: 18px 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); border: 1px solid rgba(229, 231, 235, 0.8); font-family: -apple-system, sans-serif; display: flex; flex-direction: column; }
-            .title { font-size: 16px; font-weight: 700; color: #111827; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-            .desc { font-size: 13px; color: #6B7280; line-height: 1.4; margin-bottom: 14px; }
-            .input-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
-            .input-label { font-size: 12px; color: #4B5563; font-weight: 600; padding-left: 2px; }
-            .input-field { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #E5E7EB; background: #F9FAFB; font-size: 14px; color: #111827; box-sizing: border-box; outline: none; transition: 0.2s; font-family: sans-serif; }
-            .input-field:focus { border-color: #6366f1; background: #FFFFFF; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
-            .btns { display: flex; gap: 10px; margin-top: 8px; }
-            .btn { flex: 1; padding: 12px; border-radius: 12px; border: none; font-size: 14px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-            .btn-save { background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); color: white; box-shadow: 0 4px 12px rgba(99,102,241,0.2); }
-            .btn-save:active { transform: scale(0.96); }
-            .btn-ignore { background: #F3F4F6; color: #6B7280; }
-            .btn-ignore:active { background: #E5E7EB; }
-            .btn-ban { margin-top: 10px; background: transparent; border: none; color: #9CA3AF; font-size: 12px; font-weight: 600; padding: 10px 0 2px; cursor: pointer; letter-spacing: .3px; }
+            .box { background: rgba(255, 255, 255, 0.97); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 16px; padding: 16px 18px; box-shadow: 0 12px 36px rgba(0,0,0,0.16); border: 1px solid rgba(226, 232, 240, 0.9); font-family: -apple-system, BlinkMacSystemFont, sans-serif; display: flex; flex-direction: column; }
+            .title { font-size: 15px; font-weight: 700; color: #0F172A; display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+            .desc { font-size: 12px; color: #64748B; line-height: 1.4; margin-bottom: 12px; }
+            .input-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+            .input-label { font-size: 11px; color: #475569; font-weight: 600; padding-left: 2px; }
+            .input-field { width: 100%; padding: 9px 11px; border-radius: 10px; border: 1px solid #E2E8F0; background: #F8FAFC; font-size: 13px; color: #0F172A; box-sizing: border-box; outline: none; transition: 0.2s; font-family: inherit; }
+            .input-field:focus { border-color: #4F46E5; background: #FFFFFF; box-shadow: 0 0 0 3px rgba(79,70,229,0.12); }
+            .btns { display: flex; gap: 8px; margin-top: 6px; }
+            .btn { flex: 1; padding: 10px; border-radius: 10px; border: none; font-size: 13px; font-weight: 700; cursor: pointer; transition: 0.15s; }
+            .btn-save { background: linear-gradient(135deg, #4F46E5 0%, #6366F1 100%); color: white; box-shadow: 0 3px 10px rgba(79,70,229,0.25); }
+            .btn-save:active { transform: scale(0.97); }
+            .btn-ignore { background: #F1F5F9; color: #475569; }
+            .btn-ignore:active { background: #E2E8F0; }
+            .btn-ban { margin-top: 8px; background: transparent; border: none; color: #94A3B8; font-size: 11px; font-weight: 600; padding: 6px 0 0; cursor: pointer; }
             .btn-ban:active { color: #EF4444; }
+            @media (prefers-color-scheme: dark) {
+                .box { background: rgba(30, 41, 59, 0.97); border-color: rgba(51, 65, 85, 0.9); box-shadow: 0 12px 36px rgba(0,0,0,0.45); }
+                .title { color: #F8FAFC; }
+                .desc, .input-label { color: #94A3B8; }
+                .input-field { background: #0F172A; border-color: #334155; color: #F8FAFC; }
+                .input-field:focus { background: #1E293B; border-color: #6366F1; }
+                .btn-ignore { background: #334155; color: #E2E8F0; }
+            }
         </style>
         <div class="box">
-            <div class="title"><span style="font-size:18px;">✨</span> 凝结新星辰</div>
-            <div class="desc">捕获到新的通行证，您可以直接在此核对或修改：</div>
+            <div class="title"><span>🔑</span> 保存登录信息</div>
+            <div class="desc">检测到新的登录凭据，核对后可一键保存：</div>
             <div class="input-group">
-                <label class="input-label">备注名称</label>
+                <label class="input-label">网站名称</label>
                 <input type="text" id="prompt-title" class="input-field" placeholder="网站名称">
             </div>
             <div class="input-group">
-                <label class="input-label">身份账号</label>
+                <label class="input-label">登录账号</label>
                 <input type="text" id="prompt-acc" class="input-field" placeholder="未捕获到账号，可手动补全">
             </div>
-            <div class="input-group" style="margin-bottom: 14px;">
-                <label class="input-label">私密秘钥</label>
+            <div class="input-group" style="margin-bottom: 10px;">
+                <label class="input-label">登录密码</label>
                 <input type="text" id="prompt-pwd" class="input-field" placeholder="密码">
             </div>
             <div class="btns">
-                <button class="btn btn-ignore" id="ignoreBtn">忽略</button>
-                <button class="btn btn-save" id="saveBtn">✦ 封存入界</button>
+                <button class="btn btn-ignore" id="ignoreBtn">暂不保存</button>
+                <button class="btn btn-save" id="saveBtn">✓ 保存</button>
             </div>
             <button class="btn-ban" id="banSiteBtn">⛔ 本页不再提示（禁用无界）</button>
         </div>

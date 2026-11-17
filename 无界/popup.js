@@ -142,14 +142,48 @@ document.addEventListener('DOMContentLoaded', () => {
   function tick() { try { if(navigator.vibrate) navigator.vibrate(15); } catch(e){} }
   function successVibrate() { try { if(navigator.vibrate) navigator.vibrate([20, 50, 20]); } catch(e){} }
 
-  const pages = { 'lock': document.getElementById('pageLock'), 'vault': document.getElementById('pageVault'), 'form': document.getElementById('pageForm'), 'backup': document.getElementById('pageBackup'), 'settings': document.getElementById('pageSettings') };
-  let currentNavTarget = 'vault'; 
+  const pages = {
+    'lock': document.getElementById('pageLock'),
+    'vault': document.getElementById('pageVault'),
+    'form': document.getElementById('pageForm'),
+    'backup': document.getElementById('pageBackup'),
+    'settings': document.getElementById('pageSettings')
+  };
+  let currentNavTarget = 'vault';
+  let currentFilter = 'all';
+
+  function updateVaultCount() {
+    const badge = document.getElementById('vaultCountBadge');
+    if (badge) badge.innerText = `${(window.currentVault || []).length} 条`;
+  }
+
+  function showModal({ title, desc, buttons }) {
+    const overlay = document.getElementById('confirmModal');
+    const titleEl = document.getElementById('modalTitle');
+    const descEl = document.getElementById('modalDesc');
+    const actionsEl = document.getElementById('modalActions');
+    if (!overlay) return;
+    titleEl.innerText = title || '确认操作';
+    descEl.innerText = desc || '';
+    actionsEl.innerHTML = '';
+    buttons.forEach(btnCfg => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = btnCfg.className || 'main-btn btn-ghost';
+      b.innerText = btnCfg.text;
+      b.addEventListener('click', () => {
+        overlay.classList.remove('show');
+        if (typeof btnCfg.onClick === 'function') btnCfg.onClick();
+      });
+      actionsEl.appendChild(b);
+    });
+    overlay.classList.add('show');
+  }
 
   function switchPage(pageKey, title = "", skipVibrate = false) {
-    if (!skipVibrate) tick(); 
+    if (!skipVibrate) tick();
     Object.values(pages).forEach(p => p.classList.remove('active'));
     pages[pageKey].classList.add('active');
-    // 切页时回到顶部，并确保 body 可滚动（部分安卓 WebView 需要强制刷新）
     try {
       window.scrollTo(0, 0);
       document.documentElement.scrollTop = 0;
@@ -158,35 +192,56 @@ document.addEventListener('DOMContentLoaded', () => {
       document.documentElement.style.overflowY = 'auto';
     } catch (e) {}
 
-    if (pageKey === 'vault' || pageKey === 'lock') {
-      document.getElementById('mainHeader').style.display = 'flex';
-      document.getElementById('formHeader').style.display = 'none';
-      document.getElementById('manualLockBtn').style.display = (pageKey === 'vault' && window.userConfig.useMasterKey) ? 'block' : 'none';
-      document.getElementById('goSettingsBtn').style.display = (pageKey === 'vault') ? 'block' : 'none';
-    } else {
-      document.getElementById('mainHeader').style.display = 'none';
-      document.getElementById('formHeader').style.display = 'flex';
+    const mainHeader = document.getElementById('mainHeader');
+    const formHeader = document.getElementById('formHeader');
+    const bottomNav = document.getElementById('bottomNav');
+    const manualLockBtn = document.getElementById('manualLockBtn');
+
+    if (pageKey === 'form') {
+      mainHeader.style.display = 'none';
+      formHeader.style.display = 'flex';
+      bottomNav.style.display = 'none';
       document.getElementById('topFormTitle').innerText = title;
+    } else if (pageKey === 'lock') {
+      mainHeader.style.display = 'flex';
+      formHeader.style.display = 'none';
+      bottomNav.style.display = 'none';
+      manualLockBtn.style.display = 'none';
+    } else {
+      mainHeader.style.display = 'flex';
+      formHeader.style.display = 'none';
+      bottomNav.style.display = 'flex';
+      manualLockBtn.style.display = (window.userConfig.useMasterKey) ? 'inline-flex' : 'none';
+      document.querySelectorAll('.nav-tab[data-nav]').forEach(tab => {
+        tab.classList.toggle('active', tab.getAttribute('data-nav') === pageKey);
+      });
     }
-    if (pageKey !== 'vault') document.getElementById('searchInput').value = '';
+    updateVaultCount();
   }
 
   document.getElementById('backBtn').addEventListener('click', () => {
-    if (currentNavTarget === 'vault') renderVaultList(); 
+    if (currentNavTarget === 'vault') renderVaultList(searchInput.value.trim());
     switchPage(currentNavTarget);
+  });
+
+  document.getElementById('navVaultBtn')?.addEventListener('click', () => {
+    currentNavTarget = 'vault';
+    renderVaultList(searchInput.value.trim());
+    switchPage('vault');
   });
 
   function escapeHTML(str) { return (!str) ? '' : str.replace(/[&<>'"]/g, t => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[t] || t)); }
   function getAvatarHtml(title) {
     let cleanStr = (title || 'A').replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, ''); let char = cleanStr.charAt(0) ? cleanStr.charAt(0).toUpperCase() : '✦';
-    let colors = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#f43f5e'];
-    return `<div style="display:flex; width:46px; height:46px; background-color:${colors[(char.charCodeAt(0)||0)%colors.length]}; color:#fff; align-items:center; justify-content:center; font-size:22px; font-weight:bold; border-radius:14px; flex-shrink:0; margin-right:14px;">${char}</div>`;
+    let colors = ['#4F46E5', '#EC4899', '#0D9488', '#D97706', '#7C3AED', '#DC2626', '#0284C7', '#E11D48'];
+    return `<div class="avatar-box" style="background-color:${colors[(char.charCodeAt(0)||0)%colors.length]};">${char}</div>`;
   }
 
   // ================= 🌐 当前网页 启用 / 禁用 =================
   const siteBar = document.getElementById('siteBar');
   const siteBarHost = document.getElementById('siteBarHost');
   const siteBarIcon = document.getElementById('siteBarIcon');
+  const siteBarStatusText = document.getElementById('siteBarStatusText');
   const siteToggleBtn = document.getElementById('siteToggleBtn');
   let currentSiteKey = '';
 
@@ -201,11 +256,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const blocked = isKeyDisabled(list, currentSiteKey);
       siteBar.classList.toggle('off', blocked);
       siteBarIcon.innerText = blocked ? '🚫' : '🌐';
+      if (siteBarStatusText) siteBarStatusText.innerText = blocked ? '当前网页 · 已禁用助手' : '当前网页 · 助手运行中';
       siteBarHost.innerText = currentSiteKey;
-      siteToggleBtn.innerText = blocked ? '✅ 恢复启用' : '🚫 本页禁用';
+      siteToggleBtn.innerText = blocked ? '恢复启用' : '本页禁用';
       siteToggleBtn.classList.toggle('on', !blocked);
     } catch (e) { siteBar.style.display = 'none'; }
   }
+
+  document.getElementById('siteQuickAddBtn')?.addEventListener('click', () => {
+    document.getElementById('showFormBtn')?.click();
+  });
 
   siteToggleBtn.addEventListener('click', async () => {
     if (!currentSiteKey) return;
@@ -225,13 +285,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!box) return;
     const data = Array.isArray(list) ? list : await loadDisabledSites();
     if (!data.length) {
-      box.innerHTML = '<div style="font-size:12px;color:var(--text-sub);padding:2px 0;line-height:1.6;">还没有禁用任何网站。<br>在首页顶部点「🚫 本页禁用」即可加入。</div>';
+      box.innerHTML = '<div style="font-size:12px;color:var(--text-sub);padding:4px 0;line-height:1.5;">暂无禁用网站。可在首页顶部一键禁用，或在此手动添加域名。</div>';
       return;
     }
     box.innerHTML = data.map(k => `
       <div class="site-item">
         <div class="s-key">${escapeHTML(k)}</div>
-        <button class="icon-btn s-remove" data-key="${escapeHTML(k)}">✕</button>
+        <button type="button" class="s-remove" data-key="${escapeHTML(k)}" title="移除">✕</button>
       </div>`).join('');
     box.querySelectorAll('.s-remove').forEach(btn => btn.addEventListener('click', async () => {
       tick();
@@ -243,6 +303,21 @@ document.addEventListener('DOMContentLoaded', () => {
       window.showToast('已恢复：' + key, 'success');
     }));
   }
+
+  document.getElementById('addDisabledSiteBtn')?.addEventListener('click', async () => {
+    const inp = document.getElementById('addDisabledSiteInput');
+    const val = (inp?.value || '').trim().toLowerCase();
+    if (!val) return window.showToast('请输入域名或路径', 'error');
+    const list = await loadDisabledSites();
+    if (!list.includes(val)) {
+      list.push(val);
+      await saveDisabledSites(list);
+    }
+    inp.value = '';
+    renderDisabledSites(list);
+    refreshSiteBar();
+    window.showToast('已添加到禁用名单', 'success');
+  });
 
   refreshSiteBar();
 
@@ -349,70 +424,124 @@ document.addEventListener('DOMContentLoaded', () => {
             renderVaultList(); switchPage('vault', '', true); return;
           }
         }
-        authMode = 'unlock'; lockTitle.innerText = "✦ 验证身份"; lockDesc.innerText = "请输入主控秘钥解锁您的星图"; cancelLockBtn.style.display = 'none'; switchPage('lock', '', true);
+        authMode = 'unlock'; lockTitle.innerText = "验证身份"; lockDesc.innerText = "请输入主控密码解锁您的密码库"; cancelLockBtn.style.display = 'none'; switchPage('lock', '', true);
       } else {
-        authMode = 'setup'; window.currentVault = res.vault_data || []; 
-        lockTitle.innerText = "✦ 初始化保护"; lockDesc.innerHTML = "首次启用，请设置主控秘钥<br>⚠️ 离线加密机制，遗忘无法找回！"; cancelLockBtn.style.display = 'none'; switchPage('lock', '', true);
+        authMode = 'setup'; window.currentVault = res.vault_data || [];
+        lockTitle.innerText = "初始化安全保护"; lockDesc.innerHTML = "首次启用，请设置主控密码<br>⚠️ 离线加密机制，遗忘无法找回！"; cancelLockBtn.style.display = 'none'; switchPage('lock', '', true);
       }
     });
   }
 
+  document.getElementById('toggleMasterEyeBtn')?.addEventListener('click', () => {
+    const btn = document.getElementById('toggleMasterEyeBtn');
+    if (masterPwdInput.type === 'password') { masterPwdInput.type = 'text'; btn.innerText = '🙈'; }
+    else { masterPwdInput.type = 'password'; btn.innerText = '👁️'; }
+  });
+
+  masterPwdInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); unlockBtn.click(); }
+  });
+
   unlockBtn.addEventListener('click', async () => {
-    let pwd = masterPwdInput.value.trim(); if (!pwd) return window.showToast('秘钥不能为空', 'error');
+    let pwd = masterPwdInput.value.trim(); if (!pwd) return window.showToast('密码不能为空', 'error');
+    const oldBtnText = unlockBtn.innerText;
     unlockBtn.innerText = "处理中...";
-    if (authMode === 'setup' || authMode === 'turn_on') {
-      // 仅首次初始化时生成随机盐；已有盐绝不覆盖，防止旧密文无法解密
-      const saltRes = await chrome.storage.local.get(['user_salt']);
-      if (!saltRes.user_salt) {
-        const randomSalt = crypto.getRandomValues(new Uint8Array(16));
-        await chrome.storage.local.set({ user_salt: buf2b64(randomSalt) });
-      }
-      let hash = await hashPwd(pwd); let enc = await encryptStr(JSON.stringify(window.currentVault), pwd);
-      window.userConfig.useMasterKey = true; saveConfig();
-      chrome.storage.local.set({ master_hash: hash, encrypted_vault: enc, unlock_token: pwd, unlock_time: Date.now() }, () => {
-        chrome.storage.local.remove('vault_data'); window.unlockToken = pwd; masterPwdInput.value = ''; unlockBtn.innerText = "确认";
-        if (authMode === 'turn_on') { renderSettings(); switchPage('settings', '⚙️ 星图枢纽'); } else { renderVaultList(); switchPage('vault'); }
-      });
-    } else {
-      let hash = await hashPwd(pwd);
-      chrome.storage.local.get(['master_hash', 'encrypted_vault'], async (res) => {
+    unlockBtn.disabled = true;
+    try {
+      if (authMode === 'setup' || authMode === 'turn_on' || authMode === 'change_new') {
+        const saltRes = await chrome.storage.local.get(['user_salt']);
+        if (!saltRes.user_salt) {
+          const randomSalt = crypto.getRandomValues(new Uint8Array(16));
+          await chrome.storage.local.set({ user_salt: buf2b64(randomSalt) });
+        }
+        let hash = await hashPwd(pwd); let enc = await encryptStr(JSON.stringify(window.currentVault), pwd);
+        window.userConfig.useMasterKey = true; saveConfig();
+        await new Promise(resolve => chrome.storage.local.set({ master_hash: hash, encrypted_vault: enc, unlock_token: pwd, unlock_time: Date.now() }, resolve));
+        chrome.storage.local.remove('vault_data');
+        window.unlockToken = pwd; masterPwdInput.value = ''; masterPwdInput.type = 'password';
+        if (authMode === 'turn_on' || authMode === 'change_new') {
+          window.showToast(authMode === 'change_new' ? '主控密码已更新' : '安全护盾已开启', 'success');
+          renderSettings(); switchPage('settings');
+        } else {
+          renderVaultList(); switchPage('vault');
+        }
+      } else {
+        let hash = await hashPwd(pwd);
+        const res = await new Promise(resolve => chrome.storage.local.get(['master_hash', 'encrypted_vault'], resolve));
         if (res.master_hash === hash) {
           if (authMode === 'turn_off') {
             window.userConfig.useMasterKey = false; saveConfig();
-            chrome.storage.local.set({ vault_data: window.currentVault }, () => {
-              chrome.storage.local.remove(['encrypted_vault', 'master_hash', 'unlock_token', 'unlock_time']);
-              window.unlockToken = null; masterPwdInput.value = ''; unlockBtn.innerText = "确认"; renderSettings(); switchPage('settings', '⚙️ 星图枢纽');
-            });
+            await new Promise(resolve => chrome.storage.local.set({ vault_data: window.currentVault }, resolve));
+            chrome.storage.local.remove(['encrypted_vault', 'master_hash', 'unlock_token', 'unlock_time']);
+            window.unlockToken = null; masterPwdInput.value = ''; masterPwdInput.type = 'password';
+            window.showToast('已关闭安全护盾', 'success');
+            renderSettings(); switchPage('settings');
+          } else if (authMode === 'change_verify') {
+            masterPwdInput.value = '';
+            authMode = 'change_new';
+            lockTitle.innerText = "设置新主控密码";
+            lockDesc.innerText = "请输入新的主控密码，本地数据将使用新密码重新加密";
+            unlockBtn.innerText = "确认修改";
           } else {
             let dec = await decryptStr(res.encrypted_vault, pwd); window.unlockToken = pwd; window.currentVault = JSON.parse(dec || "[]");
-            chrome.storage.local.set({ unlock_token: pwd, unlock_time: Date.now() }); 
-            checkAndMergeTempVault(); 
-            masterPwdInput.value = ''; unlockBtn.innerText = "确认"; renderVaultList(); switchPage('vault');
+            chrome.storage.local.set({ unlock_token: pwd, unlock_time: Date.now() });
+            checkAndMergeTempVault();
+            masterPwdInput.value = ''; masterPwdInput.type = 'password';
+            renderVaultList(); switchPage('vault');
           }
-        } else { window.showToast('秘钥错误', 'error'); unlockBtn.innerText = "确认"; }
-      });
+        } else {
+          window.showToast('主控密码错误', 'error');
+        }
+      }
+    } finally {
+      unlockBtn.disabled = false;
+      if (authMode !== 'change_new') unlockBtn.innerText = oldBtnText === '处理中...' ? '确认' : oldBtnText;
     }
   });
 
-  cancelLockBtn.addEventListener('click', () => { masterPwdInput.value = ''; unlockBtn.innerText = "确认"; renderSettings(); switchPage('settings', '⚙️ 星图枢纽'); });
-  document.getElementById('manualLockBtn').addEventListener('click', () => { window.unlockToken = null; window.currentVault = []; chrome.storage.local.remove(['unlock_token', 'unlock_time'], () => { tick(); initSystem(); }); });
+  cancelLockBtn.addEventListener('click', () => {
+    masterPwdInput.value = ''; masterPwdInput.type = 'password';
+    unlockBtn.innerText = "解锁进入";
+    renderSettings(); switchPage('settings');
+  });
+  document.getElementById('manualLockBtn').addEventListener('click', () => {
+    window.unlockToken = null; window.currentVault = [];
+    chrome.storage.local.remove(['unlock_token', 'unlock_time'], () => { tick(); initSystem(); });
+  });
 
-  document.getElementById('goSettingsBtn').addEventListener('click', () => { currentNavTarget = 'vault'; renderSettings(); switchPage('settings', '⚙️ 星图枢纽'); });
-  const tgMaster = document.getElementById('toggleMasterKey'); const selTimeout = document.getElementById('selectLockTimeout'); const tgAuto = document.getElementById('toggleAutoFill'); const tgAutoSave = document.getElementById('toggleAutoSave');
-  function renderSettings() { 
-      tgMaster.checked = window.userConfig.useMasterKey; selTimeout.value = window.userConfig.lockTimeout; 
-      tgAuto.checked = window.userConfig.autoFill; 
-      tgAutoSave.checked = window.userConfig.autoSavePrompt !== false; 
-      selTimeout.disabled = !window.userConfig.useMasterKey; 
+  document.getElementById('goSettingsBtn').addEventListener('click', () => {
+    currentNavTarget = 'vault'; renderSettings(); switchPage('settings');
+  });
+  const tgMaster = document.getElementById('toggleMasterKey');
+  const selTimeout = document.getElementById('selectLockTimeout');
+  const tgAuto = document.getElementById('toggleAutoFill');
+  const tgAutoSave = document.getElementById('toggleAutoSave');
+  function renderSettings() {
+      tgMaster.checked = window.userConfig.useMasterKey;
+      selTimeout.value = window.userConfig.lockTimeout;
+      tgAuto.checked = window.userConfig.autoFill;
+      tgAutoSave.checked = window.userConfig.autoSavePrompt !== false;
+      selTimeout.disabled = !window.userConfig.useMasterKey;
+      const changeRow = document.getElementById('changeMasterPwdRow');
+      if (changeRow) changeRow.style.display = window.userConfig.useMasterKey ? 'flex' : 'none';
       renderDisabledSites();
   }
   tgAuto.addEventListener('change', () => { window.userConfig.autoFill = tgAuto.checked; saveConfig(); });
   tgAutoSave.addEventListener('change', () => { window.userConfig.autoSavePrompt = tgAutoSave.checked; saveConfig(); });
   selTimeout.addEventListener('change', () => { window.userConfig.lockTimeout = parseInt(selTimeout.value); saveConfig(); });
   tgMaster.addEventListener('click', (e) => {
-    e.preventDefault(); 
-    if (window.userConfig.useMasterKey) { authMode = 'turn_off'; lockTitle.innerText = "关闭安全护盾"; lockDesc.innerText = "请输入当前主控秘钥以关闭保护并解密数据"; cancelLockBtn.style.display = 'block'; switchPage('lock'); } 
-    else { authMode = 'turn_on'; lockTitle.innerText = "启用安全护盾"; lockDesc.innerHTML = "请设置主控秘钥<br>您的现有星图数据将立即被加密保护"; cancelLockBtn.style.display = 'block'; switchPage('lock'); }
+    e.preventDefault();
+    if (window.userConfig.useMasterKey) {
+      authMode = 'turn_off'; lockTitle.innerText = "关闭安全护盾"; lockDesc.innerText = "请输入当前主控密码以关闭保护并解密数据";
+      unlockBtn.innerText = "确认关闭"; cancelLockBtn.style.display = 'inline-flex'; switchPage('lock');
+    } else {
+      authMode = 'turn_on'; lockTitle.innerText = "启用安全护盾"; lockDesc.innerHTML = "请设置主控密码<br>您的现有数据将立即被加密保护";
+      unlockBtn.innerText = "确认启用"; cancelLockBtn.style.display = 'inline-flex'; switchPage('lock');
+    }
+  });
+  document.getElementById('changeMasterPwdBtn')?.addEventListener('click', () => {
+    authMode = 'change_verify'; lockTitle.innerText = "验证当前主控密码"; lockDesc.innerText = "请输入当前使用的主控密码以继续";
+    unlockBtn.innerText = "下一步"; cancelLockBtn.style.display = 'inline-flex'; switchPage('lock');
   });
 
   // ================= 核心星图渲染 =================
@@ -426,31 +555,73 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderItemHtml(item, isCurrentTab = false, isSubItem = false) {
       let ds = escapeHTML(item.title || item.domain), su = escapeHTML(item.url), sa = escapeHTML(item.acc), sp = escapeHTML(item.pwd);
-      let badge = (item.acc || item.pwd) ? `<span class="badge pwd">🔑 通行证</span>` : `<span class="badge bm">⭐ 星标</span>`;
-      let ah = sa ? `<div class="acc-text">账号: <span>${sa}</span></div>` : '<div class="acc-text">（星标网址）</div>';
-      let ph = sp ? `<div class="detail-line" style="display:flex; align-items:center;">密钥: <span style="margin-left:4px; font-family:monospace; color:var(--text-main);">••••••••</span><button class="icon-btn copy-btn" data-pwd="${sp}" style="width:32px; height:32px; font-size:14px; margin-left:8px; background:rgba(99,102,241,0.1); border:none; border-radius:8px;">📋</button></div>` : '';
-      let isMainClass = item.isMain ? 'is-main' : '';
+      let hasCred = !!(item.acc || item.pwd);
+      let mainStar = item.isMain ? `<span class="badge main-star">★ 默认</span>` : '';
+      let badge = hasCred ? `<span class="badge pwd">🔑</span>` : `<span class="badge bm">⭐ 书签</span>`;
+      let subText = sa ? sa : (su || item.domain || '网址书签');
+
+      // 卡片右侧一键快捷按钮（无需展开即可操作）
+      let quickHtml = '<div class="quick-actions">';
+      if (isCurrentTab && hasCred) {
+          quickHtml += `<button type="button" class="q-btn primary btn-inject" data-id="${item.id}" title="填充到当前网页">⚡ 填充</button>`;
+      }
+      if (sa) {
+          quickHtml += `<button type="button" class="q-btn btn-copy-acc" data-acc="${sa}" title="复制账号">账号</button>`;
+      }
+      if (sp) {
+          quickHtml += `<button type="button" class="q-btn btn-copy-pwd" data-pwd="${sp}" title="复制密码">密码</button>`;
+      }
+      if (!hasCred && su) {
+          quickHtml += `<button type="button" class="q-btn soft-primary btn-open-url" data-url="${su}" title="打开网页">打开</button>`;
+      }
+      quickHtml += '</div>';
+
+      // 展开后详细信息
+      let detailRows = '';
+      if (sa) {
+          detailRows += `<div class="detail-row"><span class="detail-label">账号</span><span class="detail-val">${sa}</span><div class="detail-btns"><button type="button" class="mini-btn btn-copy-acc" data-acc="${sa}">复制</button></div></div>`;
+      }
+      if (sp) {
+          detailRows += `<div class="detail-row"><span class="detail-label">密码</span><span class="detail-val pwd-mask" data-pwd="${sp}" data-revealed="0">••••••••</span><div class="detail-btns"><button type="button" class="mini-btn btn-reveal-pwd">显示</button><button type="button" class="mini-btn btn-copy-pwd" data-pwd="${sp}">复制</button></div></div>`;
+      }
+      if (su) {
+          detailRows += `<div class="detail-row"><span class="detail-label">网址</span><span class="detail-val url-link btn-open-url" data-url="${su}">${su}</span><div class="detail-btns"><button type="button" class="mini-btn btn-open-url" data-url="${su}">访问</button></div></div>`;
+      }
+
       let btnMainClass = item.isMain ? 'active' : '';
-      let btnMainHtml = (item.acc || item.pwd) ? `<button class="icon-btn btn-main ${btnMainClass}" data-id="${item.id}" title="设为默认主星">★</button>` : '';
-      let injectHtml = (isCurrentTab && (item.acc || item.pwd)) ? `<button class="icon-btn btn-inject" data-id="${item.id}" title="强制注入当前网页">🚀</button>` : '';
-      let editHtml = `<button class="icon-btn btn-edit" data-id="${item.id}" title="编辑 / 抹除">🪄</button>`;
-      
+      let btnMainHtml = hasCred ? `<button type="button" class="footer-btn btn-main ${btnMainClass}" data-id="${item.id}">${item.isMain ? '★ 已设为默认' : '☆ 设为默认'}</button>` : '';
+      let injectHtml = (isCurrentTab && hasCred) ? `<button type="button" class="footer-btn btn-inject" data-id="${item.id}">⚡ 填充</button>` : '';
+      let editHtml = `<button type="button" class="footer-btn btn-edit" data-id="${item.id}">✏️ 编辑</button>`;
+
+      let isMainClass = item.isMain ? 'is-main' : '';
+      let currentMatchClass = (isCurrentTab && !isSubItem) ? 'current-match' : '';
       let subClass = isSubItem ? 'sub-item' : '';
       let avatarHtml = !isSubItem ? getAvatarHtml(ds) : '';
       let expandedClass = (isCurrentTab && !isSubItem) ? 'expanded' : '';
 
       return `
-      <div class="item-card ${isMainClass} ${subClass} ${expandedClass}" data-id="${item.id}">
-          <div class="item-header">${avatarHtml}<div class="info"><div class="title">${ds} ${badge}</div>${ah}</div><div class="expand-arrow">▼</div></div>
-          <div class="item-body">${ph}<div class="detail-line" style="font-size: 11px; margin-top: 6px; color: #9CA3AF;">${su}</div><div class="action-icons">${btnMainHtml}${injectHtml}${editHtml}</div></div>
+      <div class="item-card ${isMainClass} ${currentMatchClass} ${subClass} ${expandedClass}" data-id="${item.id}">
+          <div class="item-header">
+              ${avatarHtml}
+              <div class="info">
+                  <div class="title-row"><span class="title">${ds}</span>${badge}${mainStar}</div>
+                  <div class="sub-line">${subText}</div>
+              </div>
+              ${quickHtml}
+              <div class="expand-arrow">▼</div>
+          </div>
+          <div class="item-body">
+              <div class="detail-grid">${detailRows}</div>
+              <div class="item-footer-actions">${btnMainHtml}${injectHtml}${editHtml}</div>
+          </div>
       </div>`;
   }
 
   function renderGroupHtml(domain, items, isCurrentTab = false) {
       if (items.length === 1) return renderItemHtml(items[0], isCurrentTab);
       let firstItem = items[0]; let groupTitle = escapeHTML(domain || firstItem.title || '聚合账号');
-      let expandedClass = isCurrentTab ? 'expanded' : ''; 
-      let html = `<div class="group-card ${expandedClass}"><div class="group-header">${getAvatarHtml(groupTitle)}<div class="info"><div class="title">${groupTitle} <span class="badge bm" style="background:#F3F4F6;color:#6B7280;">📦 ${items.length} 个账号</span></div><div class="acc-text" style="color: #9CA3AF; font-size: 11px;">点击展开 / 折叠</div></div><div class="expand-arrow">▼</div></div><div class="group-body">`;
+      let expandedClass = isCurrentTab ? 'expanded' : '';
+      let html = `<div class="group-card ${expandedClass}"><div class="group-header">${getAvatarHtml(groupTitle)}<div class="info"><div class="title-row"><span class="title">${groupTitle}</span><span class="badge bm">${items.length} 个账号</span></div><div class="sub-line">点击展开查看全部账号</div></div><div class="expand-arrow">▼</div></div><div class="group-body">`;
       items.forEach(item => { html += renderItemHtml(item, isCurrentTab, true); }); html += `</div></div>`;
       return html;
   }
@@ -458,18 +629,20 @@ document.addEventListener('DOMContentLoaded', () => {
   function groupItemsByDomain(items) {
       let groups = {};
       items.forEach(item => { let key = item.domain || 'other'; if (!groups[key]) groups[key] = []; groups[key].push(item); });
-      return Object.values(groups); 
+      return Object.values(groups);
   }
 
   async function renderVaultList(filterText = '') {
-    vaultList.innerHTML = ''; currentTabVaultList.innerHTML = ''; searchBox.style.display = window.currentVault.length > 0 ? 'block' : 'none';
+    updateVaultCount();
+    vaultList.innerHTML = ''; currentTabVaultList.innerHTML = '';
+    searchBox.style.display = window.currentVault.length > 0 ? 'block' : 'none';
     if (window.currentVault.length === 0) return vaultList.innerHTML = `
-        <div style="text-align:center; color:#9CA3AF; margin-top:60px;">
-            <div style="font-size: 64px; margin-bottom: 16px; opacity: 0.8;">🌌</div>
-            <div style="font-size:16px; font-weight:bold; color:var(--text-main); margin-bottom:8px;">星海浩瀚，此刻无界</div>
-            <div style="font-size:13px; line-height: 1.6;">点击下方的「✦ 凝结此刻」<br>开始镌刻您的第一枚星辰吧</div>
+        <div style="text-align:center; color:var(--text-sub); margin-top:48px; padding: 24px 16px;">
+            <div style="font-size: 52px; margin-bottom: 12px;">🗂️</div>
+            <div style="font-size:15px; font-weight:700; color:var(--text-main); margin-bottom:6px;">还没有保存任何记录</div>
+            <div style="font-size:13px; line-height: 1.6;">点击底部「＋ 新增记录」或上方「＋ 存本页」<br>即可快速保存当前网站的账号密码或书签</div>
         </div>`;
-    
+
     let currentDomain = "";
     try {
         let tab = await getActiveTabSafely();
@@ -477,76 +650,154 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch(e) {}
 
     let matchesCurrent = []; let others = []; let lower = filterText.toLowerCase();
-    
+
     window.currentVault.forEach(item => {
+      let hasCred = !!(item.acc || item.pwd);
+      if (currentFilter === 'pwd' && !hasCred) return;
+      if (currentFilter === 'bm' && hasCred) return;
       let isMatchSearch = !filterText || ((item.title && item.title.toLowerCase().includes(lower)) || (item.url && item.url.toLowerCase().includes(lower)) || (item.acc && item.acc.toLowerCase().includes(lower)));
-      if (isMatchSearch) { if (!filterText && currentDomain && (currentDomain === item.domain || currentDomain.endsWith('.' + item.domain))) matchesCurrent.push(item); else others.push(item); }
+      if (isMatchSearch) {
+        if (!filterText && currentDomain && (currentDomain === item.domain || currentDomain.endsWith('.' + item.domain))) matchesCurrent.push(item);
+        else others.push(item);
+      }
     });
 
-    if (matchesCurrent.length === 0 && others.length === 0) return vaultList.innerHTML = '<div style="text-align:center; color:#9CA3AF; margin-top:40px; font-size:14px;">未搜索到相关星辰...</div>';
+    if (matchesCurrent.length === 0 && others.length === 0) return vaultList.innerHTML = '<div style="text-align:center; color:var(--text-sub); margin-top:36px; font-size:13px;">未找到匹配的记录</div>';
     let currentTabGroups = groupItemsByDomain(matchesCurrent); let otherGroups = groupItemsByDomain(others);
 
-    // 一次性拼接后写入，避免循环 innerHTML += 造成多次回流
     if (currentTabGroups.length > 0) {
-        let html = `<div class="section-title">✨ 匹配当前网页</div>`;
+        let html = `<div class="section-header"><div class="section-title highlight">⚡ 当前网页可用 (${matchesCurrent.length})</div></div>`;
         currentTabGroups.forEach(group => { html += renderGroupHtml(group[0].domain, group, true); });
         currentTabVaultList.innerHTML = html;
     }
     if (otherGroups.length > 0) {
-        let html = currentTabGroups.length > 0 ? `<div class="section-title" style="margin-top: 10px;">📦 全部资产</div>` : '';
+        let html = `<div class="section-header"><div class="section-title">${currentTabGroups.length > 0 ? '全部记录' : '已保存记录'} (${others.length})</div></div>`;
         otherGroups.forEach(group => { html += renderGroupHtml(group[0].domain, group, false); });
         vaultList.innerHTML = html;
     }
   }
-  // 搜索节流，避免每敲一字都全量重渲导致滚动/输入卡顿
+
+  // 搜索与分类筛选
   let searchTimer = null;
+  const clearSearchBtn = document.getElementById('clearSearchBtn');
   searchInput.addEventListener('input', (e) => {
     const val = e.target.value.trim();
+    if (clearSearchBtn) clearSearchBtn.classList.toggle('visible', val.length > 0);
     if (searchTimer) clearTimeout(searchTimer);
     searchTimer = setTimeout(() => renderVaultList(val), 120);
   });
+  clearSearchBtn?.addEventListener('click', () => {
+    searchInput.value = '';
+    clearSearchBtn.classList.remove('visible');
+    renderVaultList('');
+    searchInput.focus();
+  });
+  document.getElementById('filterTabs')?.addEventListener('click', (e) => {
+    const pill = e.target.closest('.filter-pill');
+    if (!pill) return;
+    tick();
+    currentFilter = pill.getAttribute('data-filter') || 'all';
+    document.querySelectorAll('.filter-pill').forEach(p => p.classList.toggle('active', p === pill));
+    renderVaultList(searchInput.value.trim());
+  });
 
-  // --- 密码小眼睛 ---
+  // --- 密码小眼睛 & 随机强密码生成 ---
   const toggleEyeBtn = document.getElementById('toggleEyeBtn');
   const pwdInput = document.getElementById('pwdInput');
   if (toggleEyeBtn && pwdInput) {
       toggleEyeBtn.addEventListener('click', (e) => {
           e.preventDefault();
-          if (pwdInput.type === 'password') {
-              pwdInput.type = 'text';
-              toggleEyeBtn.innerText = '🙈';
-          } else {
-              pwdInput.type = 'password';
-              toggleEyeBtn.innerText = '👁️';
-          }
+          if (pwdInput.type === 'password') { pwdInput.type = 'text'; toggleEyeBtn.innerText = '🙈'; }
+          else { pwdInput.type = 'password'; toggleEyeBtn.innerText = '👁️'; }
       });
   }
 
+  document.getElementById('genPwdBtn')?.addEventListener('click', () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*';
+    const arr = new Uint32Array(16);
+    crypto.getRandomValues(arr);
+    let generated = '';
+    for (let i = 0; i < arr.length; i++) generated += chars[arr[i] % chars.length];
+    pwdInput.value = generated;
+    pwdInput.type = 'text';
+    if (toggleEyeBtn) toggleEyeBtn.innerText = '🙈';
+    navigator.clipboard?.writeText(generated).catch(() => {});
+    successVibrate();
+    window.showToast('已生成 16 位强密码并复制', 'success');
+  });
+
+  document.getElementById('fillCurrentTabBtn')?.addEventListener('click', async () => {
+    try {
+      const tab = await getActiveTabSafely();
+      if (!tab || isRestrictedTabUrl(tab.url)) return window.showToast('当前页面不支持获取网址', 'error');
+      document.getElementById('titleInput').value = tab.title || '';
+      document.getElementById('urlInput').value = tab.url || '';
+      tick();
+      window.showToast('已填入当前网页信息', 'success');
+    } catch (e) {}
+  });
+
   // ================= 动作代理 =================
   document.getElementById('pageVault').addEventListener('click', (e) => {
-    let itemHeader = e.target.closest('.item-header');
-    if (itemHeader) { tick(); itemHeader.parentElement.classList.toggle('expanded'); return; }
-    
-    let groupHeader = e.target.closest('.group-header');
-    if (groupHeader) { tick(); groupHeader.parentElement.classList.toggle('expanded'); return; }
+    let copyAccBtn = e.target.closest('.btn-copy-acc');
+    if (copyAccBtn) {
+        e.stopPropagation();
+        navigator.clipboard.writeText(copyAccBtn.getAttribute('data-acc')).then(() => {
+            successVibrate();
+            window.showToast('账号已复制', 'success');
+        });
+        return;
+    }
 
-    let copyBtn = e.target.closest('.copy-btn');
-    if (copyBtn) { e.stopPropagation(); navigator.clipboard.writeText(copyBtn.getAttribute('data-pwd')).then(() => { successVibrate(); copyBtn.innerText = '✅'; window.showToast('密钥已复制', 'success'); setTimeout(() => copyBtn.innerText = '📋', 1500); }); return; }
-    
+    let copyPwdBtn = e.target.closest('.btn-copy-pwd');
+    if (copyPwdBtn) {
+        e.stopPropagation();
+        navigator.clipboard.writeText(copyPwdBtn.getAttribute('data-pwd')).then(() => {
+            successVibrate();
+            window.showToast('密码已复制', 'success');
+        });
+        return;
+    }
+
+    let revealBtn = e.target.closest('.btn-reveal-pwd');
+    if (revealBtn) {
+        e.stopPropagation();
+        const row = revealBtn.closest('.detail-row');
+        const valEl = row?.querySelector('.pwd-mask');
+        if (valEl) {
+            const shown = valEl.getAttribute('data-revealed') === '1';
+            valEl.textContent = shown ? '••••••••' : valEl.getAttribute('data-pwd');
+            valEl.setAttribute('data-revealed', shown ? '0' : '1');
+            revealBtn.innerText = shown ? '显示' : '隐藏';
+        }
+        return;
+    }
+
+    let openUrlBtn = e.target.closest('.btn-open-url');
+    if (openUrlBtn) {
+        e.stopPropagation();
+        const targetUrl = openUrlBtn.getAttribute('data-url');
+        if (targetUrl) chrome.tabs.create({ url: targetUrl });
+        return;
+    }
+
     let editBtn = e.target.closest('.btn-edit');
     if (editBtn) {
+        e.stopPropagation();
         let item = window.currentVault.find(x => x.id === editBtn.getAttribute('data-id'));
-        if(item) { 
-            editingId = item.id; 
-            document.getElementById('titleInput').value = item.title || ''; 
-            document.getElementById('urlInput').value = item.url || ''; 
-            document.getElementById('accInput').value = item.acc || ''; 
-            document.getElementById('pwdInput').value = item.pwd || ''; 
+        if(item) {
+            editingId = item.id;
+            document.getElementById('titleInput').value = item.title || '';
+            document.getElementById('urlInput').value = item.url || '';
+            document.getElementById('accInput').value = item.acc || '';
+            document.getElementById('pwdInput').value = item.pwd || '';
             document.getElementById('pwdInput').type = 'password';
             if (document.getElementById('toggleEyeBtn')) document.getElementById('toggleEyeBtn').innerText = '👁️';
-            document.getElementById('deleteBtn').style.display = 'block'; 
-            currentNavTarget = 'vault'; 
-            switchPage('form', '🪄 修正星迹'); 
+            const mainCb = document.getElementById('isMainCheckbox');
+            if (mainCb) mainCb.checked = !!item.isMain;
+            document.getElementById('deleteBtn').style.display = 'inline-flex';
+            currentNavTarget = 'vault';
+            switchPage('form', '编辑记录');
         }
         return;
     }
@@ -555,74 +806,135 @@ document.addEventListener('DOMContentLoaded', () => {
     if (mainBtn) {
         e.stopPropagation(); tick(); let targetItem = window.currentVault.find(x => x.id === mainBtn.getAttribute('data-id'));
         if (targetItem) {
+            const nextState = !targetItem.isMain;
             window.currentVault.forEach(item => { if (item.domain === targetItem.domain) item.isMain = false; });
-            targetItem.isMain = !mainBtn.classList.contains('active'); saveToStorage(() => renderVaultList(searchInput.value.trim()));
+            targetItem.isMain = nextState;
+            saveToStorage(() => {
+                window.showToast(nextState ? '已设为默认填充账号' : '已取消默认', 'success');
+                renderVaultList(searchInput.value.trim());
+            });
         } return;
     }
 
     let injectBtn = e.target.closest('.btn-inject');
     if (injectBtn && activeTabId) {
         e.stopPropagation(); successVibrate();
-        if (!activeTabUrl || activeTabUrl.match(/^(chrome|chrome-extension|edge|about|kiwi):/i)) return window.showToast("安全限制拦截：无法在扩展管理页或空白页中注入。", "error");
+        if (!activeTabUrl || activeTabUrl.match(/^(chrome|chrome-extension|edge|about|kiwi):/i)) return window.showToast("安全限制：无法在浏览器内置页中填充", "error");
         let targetItem = window.currentVault.find(x => x.id === injectBtn.getAttribute('data-id'));
         if (targetItem) {
-            injectBtn.innerText = '✅';
+            injectBtn.innerText = '✓ 已填充';
             chrome.tabs.sendMessage(activeTabId, {action: "FORCE_FILL_INJECT", data: targetItem}, (response) => {
                 if (chrome.runtime.lastError) {
-                    window.showToast("页面未完全加载或受保护", "error");
-                    injectBtn.innerText = '🚀';
-                } else { setTimeout(() => window.close(), 400); }
+                    window.showToast("页面未就绪或不支持自动填充", "error");
+                    injectBtn.innerText = '⚡ 填充';
+                } else if (response && response.status === 'blocked') {
+                    window.showToast("当前网页已禁用无界助手", "error");
+                    injectBtn.innerText = '⚡ 填充';
+                } else { setTimeout(() => window.close(), 350); }
             });
         }
+        return;
     }
+
+    let itemHeader = e.target.closest('.item-header');
+    if (itemHeader) { tick(); itemHeader.parentElement.classList.toggle('expanded'); return; }
+
+    let groupHeader = e.target.closest('.group-header');
+    if (groupHeader) { tick(); groupHeader.parentElement.classList.toggle('expanded'); return; }
   });
 
   // ================= 增删查改 =================
   document.getElementById('showFormBtn').addEventListener('click', async () => {
-    editingId = null; document.getElementById('deleteBtn').style.display = 'none'; 
-    try { 
-        let tab = await getActiveTabSafely(); 
-        document.getElementById('titleInput').value = tab?.title || ''; 
-        document.getElementById('urlInput').value = tab?.url || ''; 
+    editingId = null; document.getElementById('deleteBtn').style.display = 'none';
+    try {
+        let tab = await getActiveTabSafely();
+        if (tab && !isRestrictedTabUrl(tab.url)) {
+            document.getElementById('titleInput').value = tab.title || '';
+            document.getElementById('urlInput').value = tab.url || '';
+        } else {
+            document.getElementById('titleInput').value = '';
+            document.getElementById('urlInput').value = '';
+        }
     } catch (e) { document.getElementById('titleInput').value = ''; document.getElementById('urlInput').value = ''; }
-    document.getElementById('accInput').value = ''; 
-    document.getElementById('pwdInput').value = ''; 
+    document.getElementById('accInput').value = '';
+    document.getElementById('pwdInput').value = '';
     document.getElementById('pwdInput').type = 'password';
     if (document.getElementById('toggleEyeBtn')) document.getElementById('toggleEyeBtn').innerText = '👁️';
-    currentNavTarget = 'vault'; switchPage('form', '✦ 凝结资产');
+    const mainCb = document.getElementById('isMainCheckbox');
+    if (mainCb) mainCb.checked = true;
+    currentNavTarget = 'vault'; switchPage('form', '新增记录');
   });
 
   document.getElementById('saveBtn').addEventListener('click', () => {
-    let rawUrl = document.getElementById('urlInput').value.trim(); if (!rawUrl) return window.showToast('漫游网址为必填项！', 'error');
+    let rawUrl = document.getElementById('urlInput').value.trim(); if (!rawUrl) return window.showToast('请填写网站地址！', 'error');
     if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) rawUrl = 'https://' + rawUrl;
-    let domain = ''; try { domain = new URL(rawUrl).hostname; } catch(e) { return window.showToast('网址格式错误', 'error'); }
-    
-    let isMainFlag = false;
-    if (!editingId) { let hasMain = window.currentVault.some(i => i.domain === domain && i.isMain); isMainFlag = !hasMain && (document.getElementById('accInput').value.trim() !== ""); }
-    let newItem = { id: editingId || Date.now().toString(), domain: domain, url: rawUrl, title: document.getElementById('titleInput').value.trim() || domain, acc: document.getElementById('accInput').value.trim(), pwd: document.getElementById('pwdInput').value.trim() };
-    
-    if (editingId) { let idx = window.currentVault.findIndex(i => i.id === editingId); if (idx > -1) { newItem.isMain = window.currentVault[idx].isMain; window.currentVault[idx] = newItem; } } 
-    else { newItem.isMain = isMainFlag; window.currentVault.unshift(newItem); }
+    let domain = ''; try { domain = new URL(rawUrl).hostname; } catch(e) { return window.showToast('网址格式不正确', 'error'); }
+
+    const accVal = document.getElementById('accInput').value.trim();
+    const pwdVal = document.getElementById('pwdInput').value.trim();
+    const mainCb = document.getElementById('isMainCheckbox');
+    const wantMain = mainCb ? mainCb.checked && !!(accVal || pwdVal) : false;
+
+    if (wantMain) {
+      window.currentVault.forEach(i => { if (i.domain === domain) i.isMain = false; });
+    }
+
+    let newItem = {
+      id: editingId || Date.now().toString(),
+      domain: domain,
+      url: rawUrl,
+      title: document.getElementById('titleInput').value.trim() || domain,
+      acc: accVal,
+      pwd: pwdVal,
+      isMain: wantMain
+    };
+
+    if (editingId) {
+      let idx = window.currentVault.findIndex(i => i.id === editingId);
+      if (idx > -1) window.currentVault[idx] = newItem;
+    } else {
+      window.currentVault.unshift(newItem);
+    }
     saveToStorage(() => {
       successVibrate();
-      window.showToast(editingId ? '星迹已更新' : '星辰已封存', 'success');
+      window.showToast(editingId ? '记录已更新' : '已保存记录', 'success');
       document.getElementById('searchInput').value = '';
+      if (clearSearchBtn) clearSearchBtn.classList.remove('visible');
       renderVaultList();
       switchPage('vault');
     });
   });
 
   document.getElementById('deleteBtn').addEventListener('click', () => {
-    if(!editingId || !confirm("确定要抹除这条记录吗？")) return; 
-    window.currentVault = window.currentVault.filter(i => i.id !== editingId); 
-    saveToStorage(() => { tick(); document.getElementById('searchInput').value = ''; renderVaultList(); switchPage('vault'); });
+    if (!editingId) return;
+    showModal({
+      title: '删除记录',
+      desc: '确定要永久删除这条记录吗？此操作无法撤销。',
+      buttons: [
+        { text: '取消', className: 'main-btn btn-ghost' },
+        {
+          text: '确认删除',
+          className: 'main-btn',
+          onClick: () => {
+            window.currentVault = window.currentVault.filter(i => i.id !== editingId);
+            saveToStorage(() => {
+              tick();
+              window.showToast('已删除记录', 'success');
+              document.getElementById('searchInput').value = '';
+              renderVaultList();
+              switchPage('vault');
+            });
+          }
+        }
+      ]
+    });
   });
 
   // ================= 备份与导入 =================
-  document.getElementById('showBackupBtn').addEventListener('click', () => { 
-    document.getElementById('backupTextarea').value = ''; 
-    document.getElementById('backupTip').innerHTML = window.userConfig.useMasterKey ? "系统已开启护盾。请妥善保存星图代码，恢复时需使用当前的【主控秘钥】验证。" : "⚠️ 护盾未开启，数据以明文导出。请将代码保存在安全的地方。";
-    currentNavTarget = 'vault'; switchPage('backup', '✧ 星图备份'); 
+  document.getElementById('showBackupBtn').addEventListener('click', () => {
+    document.getElementById('backupTextarea').value = '';
+    document.getElementById('backupTip').innerHTML = window.userConfig.useMasterKey ? "已开启 AES-256 加密保护，恢复时需使用相同的主控密码。" : "⚠️ 当前未开启安全护盾，备份码为明文格式，请妥善保管。";
+    currentNavTarget = 'vault'; switchPage('backup');
   });
 
   function buildExportPayload(r) {
@@ -1018,6 +1330,23 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.innerText = old;
       btn.disabled = false;
     }
+  });
+
+  document.getElementById('webdavConfigToggle')?.addEventListener('click', () => {
+    const body = document.getElementById('webdavConfigBody');
+    const arrow = document.getElementById('webdavConfigArrow');
+    if (body) {
+      const isOpen = body.classList.toggle('open');
+      if (arrow) arrow.innerText = isOpen ? '▲' : '▼';
+    }
+  });
+
+  document.getElementById('toggleWebdavEyeBtn')?.addEventListener('click', () => {
+    const passEl = document.getElementById('webdavPassInput');
+    const btn = document.getElementById('toggleWebdavEyeBtn');
+    if (!passEl || !btn) return;
+    if (passEl.type === 'password') { passEl.type = 'text'; btn.innerText = '🙈'; }
+    else { passEl.type = 'password'; btn.innerText = '👁️'; }
   });
 
   document.getElementById('showBackupBtn')?.addEventListener('click', () => {
