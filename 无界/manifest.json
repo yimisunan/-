@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "无界 (Boundless)",
-  "version": "7.3.5",
+  "version": "7.4.0",
   "description": "打破书签与密码的边界，您的私密数字星图",
   "icons": {
     "16": "icon_16.png",
